@@ -13,7 +13,7 @@ Das Projekt ist mit **Tests (pytest)**, **Code-Checks (pre-commit, black, flake8
 
 ## 🚀 Live-Demo
 Die Applikation ist öffentlich erreichbar unter:  
-🔗 [Zur Web-App](lb324-ejhkdycee4h5evej.spaincentral-01.azurewebsites.net)  
+🔗 [Zur Web-App](https://lb324-ejhkdycee4h5evej.spaincentral-01.azurewebsites.net/)  
 
 **Login-Passwort:** `test123`
 
