@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 import os
 from dotenv import load_dotenv
 
-# .env laden (lokal). In CI/Prod kommen Variablen aus der Umgebung.
+# .env lokal laden; in CI/Prod kommen Variablen aus der Umgebung
 load_dotenv()
 
 app = Flask(__name__)
@@ -18,6 +18,7 @@ entries = []
 @dataclass
 class Entry:
     content: str
+    happiness: str = ""  # neu
     timestamp: datetime = field(default_factory=datetime.now)
 
 
@@ -59,8 +60,10 @@ def add_entry():
         return redirect(url_for("login"))
 
     content = (request.form.get("content") or "").strip()
+    happiness = (request.form.get("happiness") or "").strip()  # neu
+
     if content:
-        entries.append(Entry(content=content))
+        entries.append(Entry(content=content, happiness=happiness))
     else:
         flash("Leerer Eintrag ignoriert.", "error")
 
