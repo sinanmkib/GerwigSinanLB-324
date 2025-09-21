@@ -1,11 +1,11 @@
 import os
 import pytest
 
-# Test-ENV setzen (falls .env nicht geladen wird)
-os.environ.setdefault("PASSWORD", "test123")
-os.environ.setdefault("SECRET_KEY", "testsecret")
+# Test-ENV HART setzen (überschreibt CI-ENV sicher)
+os.environ["PASSWORD"] = "test123"
+os.environ["SECRET_KEY"] = "testsecret"
 
-from app import app  # noqa: E402  (nach ENV-Setup importieren)
+from app import app  # noqa: E402  <- Import nach ENV-Setup ist beabsichtigt
 
 
 @pytest.fixture()
