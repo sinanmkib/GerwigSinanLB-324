@@ -1,44 +1,72 @@
+from flask import Flask, render_template, request, redirect, url_for, session, flash
+from datetime import datetime
+from dataclasses import dataclass, field
 import os
-import pytest
+from dotenv import load_dotenv
 
-# Test-ENV setzen (falls .env nicht geladen wird)
-os.environ.setdefault("PASSWORD", "test123")
-os.environ.setdefault("SECRET_KEY", "testsecret")
+# .env laden (lokal). In CI/Prod kommen Variablen aus der Umgebung.
+load_dotenv()
 
-from app import app  # noqa: E402  (nach ENV-Setup importieren)
+app = Flask(__name__)
+app.secret_key = os.getenv("SECRET_KEY", os.urandom(24))
+PASSWORD = os.getenv("PASSWORD")
 
-@pytest.fixture()
-def client():
-    app.config["TESTING"] = True
-    with app.test_client() as c:
-        yield c
+# In-Memory "DB"
+entries = []
 
-def login(client, pw="test123"):
-    return client.post("/login", data={"password": pw}, follow_redirects=True)
 
-def test_index_ok(client):
-    resp = client.get("/")
-    assert resp.status_code == 200
+@dataclass
+class Entry:
+    content: str
+    timestamp: datetime = field(default_factory=datetime.now)
 
-def test_add_requires_login(client):
-    resp = client.post("/add_entry", data={"content": "Hallo"})
-    # ohne Login ⇒ Redirect zur Login-Seite
-    assert resp.status_code in (302, 308)
-    assert "/login" in resp.headers.get("Location", "")
 
-def test_add_after_login_redirects_to_index(client):
-    # erst einloggen
-    r = login(client)
-    assert r.status_code == 200
+@app.route("/", methods=["GET"])
+def index():
+    # Index ist immer erreichbar (200), zeigt Formular nur im Login
+    return render_template("index.html", entries=entries)
 
-    # dann Eintrag hinzufügen
-    resp = client.post("/add_entry", data={"content": "Test Entry Content"})
-    # jetzt Redirect zurück zur Startseite
-    assert resp.status_code in (302, 308)
-    assert resp.headers.get("Location", "").endswith("/")
 
-def test_entry_visible_after_login(client):
-    login(client)
-    resp = client.post("/add_entry", data={"content": "Visible"}, follow_redirects=True)
-    assert resp.status_code == 200
-    assert b"Visible" in resp.data
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        if not PASSWORD:
+            flash("Server falsch konfiguriert: PASSWORD fehlt.", "error")
+            return redirect(url_for("login"))
+
+        pw = (request.form.get("password") or "").strip()
+        if pw == PASSWORD:
+            session["logged_in"] = True
+            flash("Login erfolgreich.", "success")
+            return redirect(url_for("index"))
+
+        flash("Falsches Passwort.", "error")
+
+    return render_template("login.html")
+
+
+@app.route("/logout", methods=["GET"])
+def logout():
+    session.pop("logged_in", None)
+    flash("Ausgeloggt.", "success")
+    return redirect(url_for("index"))
+
+
+@app.route("/add_entry", methods=["POST"])
+def add_entry():
+    # Tests erwarten: ohne Login Redirect nach /login
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    content = (request.form.get("content") or "").strip()
+    if content:
+        entries.append(Entry(content=content))
+    else:
+        flash("Leerer Eintrag ignoriert.", "error")
+
+    # Tests erwarten Redirect zurück auf "/"
+    return redirect(url_for("index"))
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")))
