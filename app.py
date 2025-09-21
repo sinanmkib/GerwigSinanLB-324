@@ -1,58 +1,44 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
-from datetime import datetime
-from dataclasses import dataclass, field
 import os
-from dotenv import load_dotenv
+import pytest
 
-load_dotenv()  # .env laden, bevor wir ENV lesen
+# Test-ENV setzen (falls .env nicht geladen wird)
+os.environ.setdefault("PASSWORD", "test123")
+os.environ.setdefault("SECRET_KEY", "testsecret")
 
-app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", os.urandom(24))  # in Prod via ENV setzen
-PASSWORD = os.getenv("PASSWORD")
+from app import app  # noqa: E402  (nach ENV-Setup importieren)
 
-# In-Memory "DB"
-entries = []
+@pytest.fixture()
+def client():
+    app.config["TESTING"] = True
+    with app.test_client() as c:
+        yield c
 
-@dataclass
-class Entry:
-    content: str
-    timestamp: datetime = field(default_factory=datetime.now)  # neuer Zeitstempel pro Eintrag
+def login(client, pw="test123"):
+    return client.post("/login", data={"password": pw}, follow_redirects=True)
 
-@app.route("/", methods=["GET"])
-def index():
-    return render_template("index.html", entries=entries)
+def test_index_ok(client):
+    resp = client.get("/")
+    assert resp.status_code == 200
 
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if request.method == "POST":
-        if not PASSWORD:
-            flash("Server falsch konfiguriert: PASSWORD fehlt.", "error")
-            return redirect(url_for("login"))
-        user_password = request.form.get("password", "")
-        if user_password == PASSWORD:
-            session["logged_in"] = True
-            flash("Login erfolgreich.", "success")
-            return redirect(url_for("index"))
-        flash("Falsches Passwort. Bitte nochmals versuchen.", "error")
-    return render_template("login.html")
+def test_add_requires_login(client):
+    resp = client.post("/add_entry", data={"content": "Hallo"})
+    # ohne Login ⇒ Redirect zur Login-Seite
+    assert resp.status_code in (302, 308)
+    assert "/login" in resp.headers.get("Location", "")
 
-@app.route("/logout", methods=["GET"])
-def logout():
-    session.pop("logged_in", None)
-    flash("Erfolgreich ausgeloggt.", "success")
-    return redirect(url_for("index"))
+def test_add_after_login_redirects_to_index(client):
+    # erst einloggen
+    r = login(client)
+    assert r.status_code == 200
 
-@app.route("/add_entry", methods=["POST"])
-def add_entry():
-    if not session.get("logged_in"):
-        flash("Bitte zuerst einloggen.", "error")
-        return redirect(url_for("login"))
-    content = (request.form.get("content") or "").strip()
-    if content:
-        entries.append(Entry(content=content))
-    else:
-        flash("Leerer Eintrag ignoriert.", "error")
-    return redirect(url_for("index"))
+    # dann Eintrag hinzufügen
+    resp = client.post("/add_entry", data={"content": "Test Entry Content"})
+    # jetzt Redirect zurück zur Startseite
+    assert resp.status_code in (302, 308)
+    assert resp.headers.get("Location", "").endswith("/")
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")))
+def test_entry_visible_after_login(client):
+    login(client)
+    resp = client.post("/add_entry", data={"content": "Visible"}, follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"Visible" in resp.data
