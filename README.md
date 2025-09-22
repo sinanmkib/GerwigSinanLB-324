@@ -26,9 +26,12 @@ Die Applikation ist öffentlich erreichbar unter:
   - black (Code-Formatierung)
   - flake8 (Linting)
 - **pytest**: automatisierte Tests für alle Routen und Funktionen, inkl. `test_add_entry_with_happiness`.
-
 Tests lokal ausführen:
 ```bash
+
+Wichtig: die gesamte Projektstruktur ist auf dem .dev branch
+
+
 pytest -q
 
 ## Aufgabe 2
